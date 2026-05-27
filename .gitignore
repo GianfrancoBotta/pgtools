@@ -1,0 +1,7 @@
+# Ignore data and test directories
+data/
+test/
+
+# Build artifacts
+src/*.o
+src/pgtools
