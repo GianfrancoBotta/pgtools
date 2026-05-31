@@ -172,7 +172,7 @@ void pg_mht_dump(const pg_mht_t *h, const char *fn)
 	int i;
 	uint64_t hash_mask = (1ULL<<((h->k-1)*2)) - 1; // to hash only the flanks
 	if ((fp = strcmp(fn, "-")? fopen(fn, "wb") : stdout) == 0) return -1;
-	fprintf(fp, "kmer\tcount\n");
+	fprintf(fp, "kmer\tsnp\tcount\n");
 	for (i = 0; i < 1<<h->pre; ++i) {
 		pg_ht_t *g = h->h[i].h;
 		khint_t k;
