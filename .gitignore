@@ -1,5 +1,5 @@
-# Ignore data and test directories
-data/
+# Ignore results and test directories
+results/
 test/
 
 # Build artifacts

@@ -19,15 +19,24 @@ unsigned char seq_nt4_table[256] = { // translate ACGT to 0123
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
+char nt4_seq_table[5] = {
+    'A', // 0
+    'C', // 1
+    'G', // 2
+    'T', // 3
+    'N'  // 4 (invalid/ambiguous)
+};
+
 
 void pg_opt_init(pg_opt_t *o)
 {
 	memset(o, 0, sizeof(pg_opt_t));
 	o->k = 31;
+	o->min_freq = 0.95;
 	o->pre = 10;
 	o->n_threads = 4;
 	o->chunk_size = mm_parse_num("1.9g");
-	o->verbose = 1;
+	o->verbose = 0;
 }
 
 int64_t mm_parse_num(const char *str)

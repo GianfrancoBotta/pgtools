@@ -13,27 +13,25 @@ int main_count(int argc, char *argv[])
 	pg_opt_t opt;
 	ketopt_t o = KETOPT_INIT;
 	pg_opt_init(&opt);
-	while ((c = ketopt(&o, argc, argv, 1, "k:p:K:t:o:v", 0)) >= 0) {
+	while ((c = ketopt(&o, argc, argv, 1, "k:m:p:K:t:o:v", 0)) >= 0) {
 		if (c == 'k') opt.k = atoi(o.arg);
+		else if (c == 'm') opt.min_freq = atof(o.arg);
 		else if (c == 'p') opt.pre = atoi(o.arg);
 		else if (c == 'K') opt.chunk_size = mm_parse_num(o.arg);
 		else if (c == 't') opt.n_threads = atoi(o.arg);
-		else if (c == 'o') fn_out = o.arg;
 		else if (c == 'v') opt.verbose = 1;
+		else if (c == 'o') fn_out = o.arg;
 	}
 	if (argc - o.ind < 1) {
-		fprintf(stderr, "Usage: yak cntasm [options] <in1.fa> [in2.fa [...]]\n");
+		fprintf(stderr, "Usage: pgtools count [options] <in1.fa> [in2.fa [...]]\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -k INT     k-mer size [%d]\n", opt.k);
+		fprintf(stderr, "  -m FLOAT   minimum frequency of k-mers across inputs to be kept [%g]\n", opt.min_freq);
 		fprintf(stderr, "  -p INT     prefix length [%d]\n", opt.pre);
 		fprintf(stderr, "  -t INT     number of worker threads [%d]\n", opt.n_threads);
 		fprintf(stderr, "  -K INT     chunk size [1.9g]\n");
-		fprintf(stderr, "  -o FILE    output k-mer dump []\n");
 		fprintf(stderr, "  -v         verbose output\n");
-		return 1;
-	}
-	if (opt.pre < COUNTER_BITS) {
-		fprintf(stderr, "ERROR: -p should be at least %d\n", COUNTER_BITS);
+		fprintf(stderr, "  -o FILE    output k-mer dump []\n");
 		return 1;
 	}
 	if (opt.k >= 32) {
@@ -43,16 +41,20 @@ int main_count(int argc, char *argv[])
 
     h = pg_count(&argv[o.ind], argc - o.ind, &opt); // count k-mers in the input files argv
 
-    // fprintf(stderr, "[M::%s::%.3f*%.2f] processed all files; %ld distinct k-mers in the hash table\n", __func__,
-	// 			pg_realtime(), pg_cputime() / pg_realtime(), (long)h->counts);
+	if (argc - o.ind > 1) {
+		fprintf(stderr, "[M::%s] Final filtering to get SNP-mers\n", __func__);
+		long long n_del = pg_mht_filter(h, argc - o.ind, argc - o.ind, opt.min_freq, 1); // final filter to keep only SNP-mers
+		fprintf(stderr, "[M::%s] Filtered %lld k-mer entries\n", __func__, n_del);
+	}
 
     pg_mht_tighten(h);
 
     if (fn_out) pg_mht_dump(h, fn_out);
+
 	pg_mht_destroy(h);
 
 	fprintf(stderr, "[M::%s] Analyzed %d files\n", __func__, argc - o.ind);
-
+	
     return 0;
 }
 

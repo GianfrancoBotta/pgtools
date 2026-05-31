@@ -22,8 +22,11 @@ typedef struct { 			// global data shared across all file threads
     const char **fns;
 	pg_mht_t *h;
 	pthread_mutex_t mutex;
+	pthread_rwlock_t rwlock;
     int n_fns;
-	int next;               // index of next genome to process (also tracks n_genomes processed)
+	int next;          		// index of next genome to process
+	int done;				// number of genomes fully processed
+	int filt;				// flag to indicate if filtering has been done
     int n_batch;            // number of parallel genome slots
     int *batch_threads;		// number of threads assigned to each file
 } filedat_t;
@@ -46,14 +49,16 @@ typedef struct { 			// data structure for each step in kt_pipeline()
 
 static inline void ch_insert_buf(ch_buf_t *buf, int p, int k, uint64_t flanks, uint64_t center) // insert a k-mer $y to a linear buffer
 {
-	int pre  = flanks & ((1<<p) - 1);
+	int pre = flanks & ((1<<p) - 1);
 	ch_buf_t *b = &buf[pre];
+	// fprintf(stderr, "[M::%s] b.m = %d, b.n = %d, flanks = %lu, center = %lu, pre = %d\n", __func__, b->m, b->n, (unsigned long)flanks, (unsigned long)center, pre);
 	if (b->n == b->m) {
 		b->m = b->m < 8? 8 : b->m + (b->m>>1);
 		REALLOC(b->a, b->m);
 	}
-	b->a[b->n++].h_flanks = flanks;
-	b->a[b->n++].cb = center;
+	b->a[b->n].h_flanks = flanks;
+    b->a[b->n].cb = center;
+    b->n++;
 }
 
 static void count_seq_buf(ch_buf_t *buf, int k, int p, int len, const char *seq) // insert k-mers in $seq to linear buffer $buf
@@ -83,7 +88,7 @@ static void worker_for(void *data, long i, int tid) // callback for kt_for()
 	stepdat_t *s = (stepdat_t*)data;
 	ch_buf_t *b = &s->buf[i];
 	pg_mht_t *h = s->p->f->h;
-	b->n_ins += pg_mht_insert_list(h, b->n, b->a);
+	b->n_ins += pg_mht_insert_list(h, b->n, b->a, s->p->f->filt);
 }
 
 
@@ -132,7 +137,7 @@ static void *worker_pipeline(void *data, int step, void *in) // callback for kt_
 		stepdat_t *s = (stepdat_t*)in;
 		int i, n = 1<<p->f->opt->pre;
 		uint64_t n_ins = 0;
-		kt_for(p->f_threads, worker_for, s, n);
+		kt_for(p->f_threads-2, worker_for, s, n);
 		for (i = 0; i < n; ++i) {
 			n_ins += s->buf[i].n_ins;
 			free(s->buf[i].a);
@@ -154,7 +159,7 @@ static void *file_worker(void *data)
 
 		pthread_mutex_lock(&fd->mutex);
 		// grab next genome index
-        int i = fd->next++;
+        int i = fd->next++; // i = next, then next gets updated
 		if (i >= fd->n_fns) {
 			pthread_mutex_unlock(&fd->mutex);
 			break;  // all genomes have been processed, exit thread
@@ -163,13 +168,11 @@ static void *file_worker(void *data)
 
 		if (fd->opt->verbose)
 			fprintf(stderr, "[M::%s] Processing '%s'\n", __func__, pl->fn);
-		// if (pl->f->next == 10) {
-		// 	fprintf(stderr, "[M::%s] %d genomes done, filtering singletons\n", __func__, pl->f->n_gnms);
-		// 	pg_mht_filter(pl->f->h);
-		// }
 
 		pthread_mutex_unlock(&fd->mutex);
 
+
+		pthread_rwlock_rdlock(&fd->rwlock);
         gzFile fp = gzopen(pl->fn, "r");
         if (fp == 0) {
             fprintf(stderr, "[E::%s] failed to open '%s'\n", __func__, pl->fn);
@@ -179,11 +182,30 @@ static void *file_worker(void *data)
         kt_pipeline(3, worker_pipeline, pl, 3);
         kseq_destroy(pl->ks);
         gzclose(fp);
+		pthread_rwlock_unlock(&fd->rwlock);
 
-		// pthread_mutex_lock(&fd->mutex);
-		// if (fd->opt->verbose)
-		// 	fprintf(stderr, "[M::%s] %d genomes done, %ld distinct k-mers in the hash table\n", __func__, fd->next, (long)fd->h->counts);
-		// pthread_mutex_unlock(&fd->mutex);
+		pthread_mutex_lock(&fd->mutex);
+		fd->done++;
+		if (fd->opt->verbose)
+			fprintf(stderr, "[M::%s] %d genomes done, %ld distinct k-mers in the hash table\n", __func__, fd->done, (long)fd->h->counts);
+		int do_filt = 0;
+		if (fd->opt->min_freq < 1.0) { // if min_freq is 1, only filter at the end
+			int t = (1.0 - fd->opt->min_freq) * fd->n_fns;
+			do_filt = (fd->done > t && !fd->filt);
+		}
+		pthread_mutex_unlock(&fd->mutex);
+
+		// filter low frequency k-mers every n files processed (based on min_freq)
+		if (do_filt) {
+			pthread_rwlock_wrlock(&fd->rwlock);
+			if (!fd->filt) {
+				fprintf(stderr, "[M::%s] Filtering k-mers with frequency < %.2f (after processing %d files)\n", __func__, fd->opt->min_freq, fd->done);
+				int n_del = pg_mht_filter(fd->h, fd->done, fd->n_fns, fd->opt->min_freq, 0);
+				fprintf(stderr, "[M::%s] Filtered %d k-mer entries\n", __func__, n_del);
+				fd->filt = 1; // set the flag to indicate that filtering has been done
+			}
+			pthread_rwlock_unlock(&fd->rwlock);
+		}
 	}
 	
     pthread_exit(0);
@@ -198,11 +220,14 @@ pg_mht_t *pg_count(const char **fns, int n_fns, const pg_opt_t *opt)
     fd.opt = opt;
     fd.h = pg_mht_init(opt->k, opt->pre);
 	fd.next = 0;
+	fd.done = 0;
+	fd.filt = 0;
 	// split threads among input files as evenly as possible
 	fd.batch_threads = (int*)calloc(n_fns, sizeof(int));
 	fd.n_batch = assign_threads(opt->n_threads, n_fns, fd.batch_threads);
 
 	pthread_mutex_init(&fd.mutex, 0);
+	pthread_rwlock_init(&fd.rwlock, NULL);
 
 	pthread_t *tid = (pthread_t*)calloc(fd.n_batch, sizeof(pthread_t));
 	pldat_t   *pl  = (pldat_t*)calloc(fd.n_batch, sizeof(pldat_t));
@@ -216,6 +241,7 @@ pg_mht_t *pg_count(const char **fns, int n_fns, const pg_opt_t *opt)
     free(tid); free(pl); free(fd.batch_threads);
 
 	pthread_mutex_destroy(&fd.mutex);
+	pthread_rwlock_destroy(&fd.rwlock);
 
     return fd.h;
 }

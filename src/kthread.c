@@ -173,8 +173,8 @@ int assign_threads(int n_threads, int n_fns, int *out) {
 			// each genome gets base or base+1 — check bounds
 			int hi = base + (n_threads % b > 0 ? 1 : 0);
 			int lo = base;
-			if (lo < 3) break;   // below minimum, no point trying more genomes
-			if (hi > 4) continue; // would exceed cap, skip this batch size
+			if (lo < 5) break;   	// below minimum, no point trying more genomes
+			if (hi > 8) continue; 	// would exceed cap, skip this batch size
 			best_batch = b;
 		}
 	}

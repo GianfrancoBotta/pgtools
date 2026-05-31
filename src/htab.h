@@ -6,28 +6,26 @@
 #include <stdbool.h>
 
 #define PG_MAGIC "PGKM"
-#define VAL_INFO_BITS 3
+#define VAL_INFO_BITS 6
 #define COUNTER_BITS (32 - VAL_INFO_BITS)
 #define COUNTER_MAX ((1U << COUNTER_BITS) - 1)
 
-#define val_count(v)    ((v) >> VAL_INFO_BITS)
-#define val_cb(v)       ((v) & 0x3U)
-#define val_snp(v)      (((v) >> 2) & 0x1U)
-#define val_pack(cnt, snp, cb) (((uint32_t)(cnt) << VAL_INFO_BITS) | ((snp) << 2) | (cb))
+#define val_count(v) ((v) >> VAL_INFO_BITS)
+#define val_cb1(v) ((v) & 0x3U)
+#define val_cb2(v) (((v) >> 2) & 0x3U)
+#define val_snp1(v) (((v) >> 4) & 0x1U)
+#define val_snp2(v) (((v) >> 5) & 0x1U)
+#define val_pack(cnt, snp2, snp1, cb2, cb1) (((uint32_t)(cnt) << VAL_INFO_BITS) | ((snp2) << 5) | ((snp1) << 4) | ((cb2) << 2) | (cb1))
 
 typedef struct __attribute__((packed)) {
 	uint64_t h_flanks;
-	bool cb; // stores central base of k-mer and SNP information
+	uint8_t cb; // stores central base of k-mer and SNP information
 } ch_seq_t;
-
-typedef struct __attribute__((packed)) {
-	uint64_t a;
-	uint32_t b;
-} uint96_t;
 
 typedef struct { // terminal options
     int64_t chunk_size;
     int64_t n_threads;
+    double min_freq;
 	int32_t k;
     int32_t pre; // number of bits for partitioning.
     int verbose;
@@ -54,10 +52,10 @@ typedef struct {
 
 pg_mht_t *pg_mht_init(int k, int pre);
 void pg_mht_destroy(pg_mht_t *h);
-int pg_mht_insert_list(pg_mht_t *h, int n, const ch_seq_t *a);
-// void pg_mht_filter(pg_mht_t *h, int min_count);
+int pg_mht_insert_list(pg_mht_t *h, int n, const ch_seq_t *a, int filt);
+long long pg_mht_filter(pg_mht_t *h, int n_proc, int n_tot, double min_freq, int ff);
 void pg_mht_tighten(pg_mht_t *h);
 pg_mht_t *pg_count(const char **fns, int n_fns, const pg_opt_t *opt);
-int pg_mht_dump(const pg_mht_t *h, const char *fn);
+void pg_mht_dump(const pg_mht_t *h, const char *fn);
 
 #endif // HTAB_H

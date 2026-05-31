@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include "sys.h"
 
-int pg_verbose = 3;
-
 static double pg_realtime0;
 
 double pg_cputime(void)
