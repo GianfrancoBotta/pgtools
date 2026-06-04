@@ -52,7 +52,7 @@ int pg_mht_filter(pg_mht_t *h, int n_proc, int n_tot, double min_freq)
         for (k = 0; k < kh_end(g->h); ++k) {
 			if (!kh_exist(g->h, k)) continue;
 			uint32_t v = kh_val(g->h, k);
-			if ((double)(n_proc - (val_count1(v)) + (val_count2(v))) / n_tot > (1.0 - min_freq) || (!val_snp1(v) || val_snp2(v))) {
+			if ((double)(n_proc - (val_count1(v) + val_count2(v))) / n_tot > (1.0 - min_freq) || (!val_snp1(v) || val_snp2(v))) {
 				del_part[n_del_part++] = kh_key(g->h, k);
 			}
 		}
