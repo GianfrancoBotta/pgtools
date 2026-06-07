@@ -7,7 +7,8 @@
 
 int main_count(int argc, char *argv[])
 {   
-    pg_mht_t *h = 0;
+    pg_mht_t *h;
+	pg_csr_t *csr;
 	char *fn_out = 0;
 	// char *fn_out2 = 0;
 	int c, i;
@@ -42,32 +43,14 @@ int main_count(int argc, char *argv[])
 		return 1;
 	}
 
+	// first step: count k-mers in the input files argv and filter for SNP-mers
+	h = pg_count(argv + o.ind, argc - o.ind, &opt);
 
-	// first step: count k-mers in the input files argv
-    h = pg_count(&argv[o.ind], argc - o.ind, &opt, 0, 0);
-
-	int n_ins_tot = h->n_ins_tot;
-	
-	int n_del_tot;
-	if (argc - o.ind > 1) {
-		fprintf(stderr, "[M::%s] Final filtering to get SNP-mers\n", __func__);
-		n_del_tot = pg_mht_filter(h, argc - o.ind, argc - o.ind, opt.min_freq); // filter to keep only SNP-mers
-		fprintf(stderr, "[M::%s] Filtered %d k-mer entries\n", __func__, n_del_tot);
-	}
-
+	// second step: count SNPmers in each file
+	csr = pg_findsnp(argv + o.ind, argc - o.ind, h->n_ins_tot-h->n_del_tot, &opt, h);
+		
 	// if (fn_out) pg_mht_dump(h, fn_out);
-
-	// second step: count SNP-mers in the input files argv
-    h = pg_count(&argv[o.ind], argc - o.ind, &opt, 1, h);
-
-    pg_mht_tighten(h);
-
-	pg_mtx_t *m = pg_mht2mtx(h, argc - o.ind, n_ins_tot-n_del_tot);
-    if (fn_out) pg_mtx_dump(fn_out, h, &argv[o.ind], m);
-
-	free(m->snps);
-	free(m->mat);
-	free(m);
+	if (fn_out) pg_csr_dump(fn_out, h, argv + o.ind, csr);
 
 	pg_mht_destroy(h);
 
