@@ -52,7 +52,7 @@ int main_count(int argc, char *argv[])
 	csr = pg_findsnp(argv + o.ind, argc - o.ind, h->n_ins_tot, &opt, h);
 		
 	// if (fn_out) pg_mht_dump(h, fn_out);
-	if (fn_out) pg_csr_dump(fn_out, h, argv + o.ind, csr);
+	if (fn_out) pg_csr_dump(fn_out, &opt, argv + o.ind, csr);
 
 	pg_mht_destroy(h);
 

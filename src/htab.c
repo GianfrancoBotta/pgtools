@@ -441,7 +441,7 @@ static int csr_entry_cmp(const void *a, const void *b) {
     return (ea->col_id > eb->col_id) - (ea->col_id < eb->col_id);
 }
 
-void pg_csr_dump(const char *fn, const pg_mht_t *h, const char **fns, const pg_csr_t *csr)
+void pg_csr_dump(const char *fn, const pg_opt_t *opt, const char **fns, const pg_csr_t *csr)
 {
     FILE *fp;
     if ((fp = strcmp(fn, "-") ? fopen(fn, "w") : stdout) == 0)
@@ -452,9 +452,9 @@ void pg_csr_dump(const char *fn, const pg_mht_t *h, const char **fns, const pg_c
         fprintf(fp, "\t%s", fns[j]);
     fprintf(fp, "\n");
 
-    uint64_t hash_mask = (1ULL << ((h->k - 1) * 2)) - 1;
-    char seq[h->k + 1];
-    int mid = h->k >> 1;
+    uint64_t hash_mask = (1ULL << ((opt->k - 1) * 2)) - 1;
+    char seq[opt->k + 1];
+    int mid = opt->k >> 1;
 
     uint16_t *row1 = calloc(csr->n_fns, sizeof(uint16_t));
     uint16_t *row2 = calloc(csr->n_fns, sizeof(uint16_t));
@@ -474,12 +474,12 @@ void pg_csr_dump(const char *fn, const pg_mht_t *h, const char **fns, const pg_c
             e++;
         }
 
-        uint64_t flanks = pg_hash64_inv(csr->snpmer[s].flanks << h->pre, hash_mask);
+        uint64_t flanks = pg_hash64_inv(csr->snpmer[s].flanks << opt->pre, hash_mask);
         for (int j = 0; j < mid; ++j)
-            seq[h->k - 1 - j] = nt4_seq_table[(flanks >> (j * 2)) & 3];
+            seq[opt->k - 1 - j] = nt4_seq_table[(flanks >> (j * 2)) & 3];
         for (int j = 0; j < mid; ++j)
             seq[mid - 1 - j] = nt4_seq_table[(flanks >> ((mid + j) * 2)) & 3];
-        seq[h->k] = '\0';
+        seq[opt->k] = '\0';
 
         seq[mid] = nt4_seq_table[csr->snpmer[s].cb1];
         fprintf(fp, "%s\t%c/%c", seq,

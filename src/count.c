@@ -281,7 +281,7 @@ pg_csr_t *pg_findsnp(const char **fns, const int n_fns, int n_snps, const pg_opt
 {	
 	// shift bits of the hash table values to count SNPs
 	kt_for(opt->n_threads, rearrange_for, h, 1 << opt->pre);
-	
+
 	filedat_t fd;
 	fd.id_maps = pg_mht_idx(h); // index hash table to later convert it to sparse matrix
 	fd.csr = pg_csr_init(n_snps, n_fns, h, fd.id_maps); // init sparse matrix and store snpmers
@@ -309,11 +309,10 @@ pg_csr_t *pg_findsnp(const char **fns, const int n_fns, int n_snps, const pg_opt
 		pg_mht_destroy(pl[i].h);
 	}
 
+	h = pl->h; // update for main
     free(tid); free(pl); free(batch_threads);
 
 	pthread_mutex_destroy(&fd.mutex);
-
-	h = pl->h; // update for main
 
     return fd.csr;
 }

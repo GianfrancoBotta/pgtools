@@ -123,7 +123,7 @@ pg_id_map_t *pg_mht_idx(pg_mht_t *h);
 
 pg_csr_t *pg_csr_init(int n_snps, int n_fns, pg_mht_t *h, pg_id_map_t *id_maps);
 void pg_csr_insert(pg_csr_t *csr, pg_mht_t *h, pg_id_map_t *id_maps, int gnm_id);
-void pg_csr_dump(const char *fn, const pg_mht_t *h, const char **fns, const pg_csr_t *csr);
+void pg_csr_dump(const char *fn, const pg_opt_t *opt, const char **fns, const pg_csr_t *csr);
 
 pg_mht_t *pg_count(const char **fns, const int n_fns, const pg_opt_t *opt);
 pg_csr_t *pg_findsnp(const char **fns, const int n_fns, int n_snps, const pg_opt_t *opt, pg_mht_t *h);
